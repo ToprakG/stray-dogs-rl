@@ -83,6 +83,8 @@ We welcome contributions to improve and extend this project. If you’d like to 
 
 ## Citation
 
+This project is licensed under the CC BY-NC 4.0 License - see the LICENSE file for details.
+
 If you use this simulation in your research, please cite it as follows:
 
 ```bibtex
@@ -90,5 +92,6 @@ If you use this simulation in your research, please cite it as follows:
   author = {Toprak Gündoğdu},
   title = {Stray Dog Population Control Simulation},
   year = {2025},
-  url = {https://github.com/ToprakG/stray-dogs-rl},
+  url = {https://github.com/ToprakG/stray-dogs-rl}
 }
+
