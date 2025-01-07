@@ -5,11 +5,13 @@ from agents import Dog, Human  # Assuming Dog and Human classes are in dog.py
 from mesa.datacollection import DataCollector
 from reinforcement_learning import RLAgent
 import time
+import csv
+import os
 
 class DogHumanModel(mesa.Model):
     """A model to simulate interactions between dogs and humans."""
     
-    def __init__(self, width, height, num_dogs, num_humans, neutering_rate, vaccination_rate, weekly_kill_rate, initial_money, seed=None):
+    def __init__(self, width, height, num_dogs, num_humans, num_of_episodes, neutering_rate, vaccination_rate, weekly_kill_rate, initial_money, seed=None):
         # Set up the grid
         super().__init__(seed=seed)
         self.grid = mesa.space.MultiGrid(width, height, torus=True)
@@ -34,14 +36,14 @@ class DogHumanModel(mesa.Model):
         self.vaccination_rate = vaccination_rate  # Rate at which dogs are vaccinated (per week)
         self.weekly_kill_rate = weekly_kill_rate  # Rate at which dogs are killed (per week)
 
-        self.attitude_spending = 2000
+        self.attitude_spending = 20
 
         self.num_dogs = num_dogs
         self.num_humans = num_humans
 
         # Training settings
         self.current_episode = 0
-        self.num_training_episodes = 2
+        self.num_training_episodes = num_of_episodes
 
         self.reward = 0
         self.rate_rewards = []  # To store rates and their rewards
@@ -91,6 +93,8 @@ class DogHumanModel(mesa.Model):
             "skip"], 
             state_space=[10, 10, 10, 10, 1], epsilon=0.1, q_table="qtable.pickle")
         
+        self.step_count = 0
+        
         self.train_rl_agent()
     
 
@@ -118,20 +122,114 @@ class DogHumanModel(mesa.Model):
         for _ in range(50):  # Each episode has 50 steps
             self.step()  # Take one step in the simulation
         
+        
+        self.save_episode_summary()  # Save summary data after the episode
+
+        
         optimal_rates = self.get_optimal_rates()
         print("Optimal Neuter Rate:", optimal_rates["neuter_rate"])
         print("Optimal Vaccinate Rate:", optimal_rates["vaccinate_rate"])
         print("Weekly Kill Rate", optimal_rates["kill_rate"])
         print("Highest Reward Achieved:", optimal_rates["reward"])
+    
+
+    def save_step_data(self):
+        """Save relevant data for each simulation step."""
+        # Define the column names (fieldnames) for the step data
+        fieldnames = [
+            "current_episode", 
+            "step_count", 
+            "neutering_rate", 
+            "vaccination_rate", 
+            "weekly_kill_rate", 
+            "money", 
+            "reward", 
+            "dog_population", 
+            "rabid_dog_population", 
+            "vaccinated_dog_population"
+        ]
+        
+        # Check if the file already exists to avoid writing the header multiple times
+        file_exists = os.path.isfile("simulation_results.csv")
+        
+        # Open the CSV file in append mode ('a')
+        with open("simulation_results.csv", "a", newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+            
+            # Write the header only if the file doesn't exist
+            if not file_exists:
+                writer.writeheader()
+
+            # Write the data for the current step
+            writer.writerow({
+                "current_episode": self.current_episode,
+                "step_count": self.step_count,
+                "neutering_rate": self.neutering_rate,
+                "vaccination_rate": self.vaccination_rate,
+                "weekly_kill_rate": self.weekly_kill_rate,
+                "money": self.money,
+                "reward": self.reward,
+                "dog_population": self.return_the_dog_agents(),
+                "rabid_dog_population": self.return_the_rabid_dog_agents(),
+                "vaccinated_dog_population": self.return_the_vaccinated_dog_agents()
+            })
+
+    
+    def save_episode_summary(self):
+        """Save summary statistics after each training episode."""
+        # Define the fieldnames
+        fieldnames =  [
+            "current_episode", 
+            "neutering_rate", 
+            "vaccination_rate", 
+            "weekly_kill_rate", 
+            "money", 
+            "reward", 
+            "optimal_rates", 
+            "dog_population", 
+            "rabid_dog_population", 
+            "vaccinated_dog_population"
+        ]
+
+        # Check if the file already exists to avoid rewriting the header
+        file_exists = os.path.isfile("episode_summary.csv")
+
+        # Open the file in append mode ('a')
+        with open("episode_summary.csv", "a", newline='') as file:
+            writer = csv.DictWriter(file, fieldnames=fieldnames)
+
+            # Write the header only if the file does not exist
+            if not file_exists:
+                writer.writeheader()
+
+            # Write the data row for the current episode
+            writer.writerow({
+                "current_episode": self.current_episode,
+                "neutering_rate": self.neutering_rate,
+                "vaccination_rate": self.vaccination_rate,
+                "weekly_kill_rate": self.weekly_kill_rate,
+                "money": self.money,
+                "reward": self.reward,
+                "optimal_rates": self.get_optimal_rates()["reward"],  # Final reward after episode
+                "dog_population": self.return_the_dog_agents(),  # Final dog population
+                "rabid_dog_population": self.return_the_rabid_dog_agents(),  # Final rabid dogs
+                "vaccinated_dog_population": self.return_the_vaccinated_dog_agents()  # Final vaccinated dogs
+            })
+
 
     def step(self):
         self.datacollector.collect(self)
+
+        self.step_count += 1
+
+        self.save_step_data()
 
         self.deduct_spending()
 
         if self.money <= 0:
             self.reward -= 10000000
             self.rate_rewards.append((self.neutering_rate, self.vaccination_rate, self.weekly_kill_rate, self.reward))
+            self.save_episode_summary()  # Save episode data before reset
             self.datacollector.collect(self)
             print("Simulation failed! Retrying!")
             self.running = False
@@ -152,7 +250,7 @@ class DogHumanModel(mesa.Model):
 
             # Evaluate the reward based on the new system state
             self.reward = self.get_reward()
-            self.rate_rewards.append((self.neutering_rate, self.vaccination_rate, self.reward))
+            self.rate_rewards.append((self.neutering_rate, self.vaccination_rate, self.weekly_kill_rate, self.reward))
             next_state = self.get_state()  # Get the state after the action
             self.rl_agent.update_q_table(tuple(state), action, self.reward, tuple(next_state))
         else:

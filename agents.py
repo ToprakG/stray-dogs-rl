@@ -331,6 +331,20 @@ class Human(mesa.Agent):
             self.previous_money_spent = self.model.attitude_spending
         else:
             self.previous_money_spent = self.model.attitude_spending
+        
+        if self.age <= 7200:
+            if random.random() < 0.4:
+                self.remove()
+        elif self.age <= 14400:
+            if random.random() < 0.8:
+                self.remove()
+        elif self.age > random.randint(14400, 36500):
+            self.remove()
+
+        # Age-related mortality risk
+        elif self.age > 900:  
+            if random.random() < 0.1:
+                self.remove()
 
         
     def make_decision(self, dog):
